@@ -88,28 +88,142 @@ And here's an explanation from the model script:
 
 ---
 
+这是英文版：
+
+---
+
 ## Quick Start
 
-### 0. Prerequisites
+> **Goal:** Download the weights and run inference. For the full training pipeline, see the *Full Reproduction* section below.
+
+### Step 1 — Create Environment and Clone Repository
+
+```bash
+conda create -n pie python=3.11 -y
+conda activate pie
+
+git clone https://github.com/Tianyu-Zhou1964/PIE-Handmaking_LLM.git
+cd PIE-Handmaking_LLM
+```
+
+### Step 2 — Install Rust Toolchain
+
+The BPE engine is implemented in Rust + PyO3 and requires local compilation. **Install Rust before installing Python dependencies.**
+
+**Linux / macOS:**
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env
+```
+
+**Windows (PowerShell):**
+```powershell
+winget install Rustlang.Rustup
+# Or download rustup-init.exe from https://rustup.rs and run it
+# Reopen a terminal after installation for environment variables to take effect
+```
+
+Verify:
+```bash
+rustc --version   # Success if a version number is printed
+```
+
+### Step 3 — Install Python Dependencies
+
+**Important! Always install PyTorch manually — the default pip version is CPU-only.**
+
+PyTorch must be installed with an explicit CUDA version. All other dependencies are handled by `requirements.txt`:
+
+```bash
+# Choose the line that matches your CUDA version (check: top-right of nvidia-smi output)
+pip install torch --index-url https://download.pytorch.org/whl/cu121   # CUDA 12.1
+pip install torch --index-url https://download.pytorch.org/whl/cu118   # CUDA 11.8
+# CPU-only inference: pip install torch
+
+# Install remaining dependencies (maturin included — no separate install needed)
+pip install -r requirements.txt
+```
+
+### Step 4 — Build the BPE Engine
+
+```bash
+cd Chinese/src/custom_bpe/
+maturin develop --release
+```
+
+Verify the build:
+```bash
+cd Chinese/src/
+python -c "import custom_bpe; print('BPE engine loaded successfully ✓')"
+```
+
+### Step 5 — Download Model Weights
+
+**International users (HuggingFace):**
+```bash
+pip install huggingface_hub
+python -c "
+from huggingface_hub import hf_hub_download
+hf_hub_download(
+    repo_id='Tianyu-Zhou/PIE1.0-0.2B-dense-base',
+    filename='PIE-0.2B-dense.pth',
+    local_dir='./Checkpoint'
+)
+"
+```
+
+**Users in China (ModelScope):**
+```bash
+pip install modelscope
+python -c "
+from modelscope import snapshot_download
+snapshot_download(
+    'Zaoshangzhou/PIE1.0-0.2B-dense-base',
+    local_dir='./Checkpoint'
+)
+"
+```
+
+Confirm the weights are in place:
+```bash
+ls Checkpoint/
+# You should see PIE-0.2B-dense.pth
+```
+
+### Step 6 — Run Inference
+
+```bash
+cd Chinese/src/
+python inference.py
+```
+
+Supports CUDA / Apple MPS / CPU. `device="auto"` detects the backend automatically — no manual configuration needed.
+Sampling parameters (temperature, top_k, top_p, repetition_penalty, etc.) can be tuned in `Chinese/config_zh.yaml`.
+
+---
+
+## Full Reproduction
+
+### 0. Requirements
 
 | Dependency | Minimum Version | Notes |
 |---|---|---|
 | Python | 3.10+ | 3.11 recommended |
-| PyTorch | 2.0+ | Required for `F.scaled_dot_product_attention` (FlashAttention backend) |
-| CUDA | 11.8+ | Required for training; inference works on CPU or Apple MPS |
-| Rust Toolchain | stable | For compiling the Rust BPE engine — [one-line install](https://rustup.rs/) |
-| maturin | 1.0+ | PyO3 build tool — compiles Rust into an `import`-able Python module |
+| PyTorch | 2.0+ | Requires `F.scaled_dot_product_attention` (FlashAttention backend) |
+| CUDA | 11.8+ | Required for training; inference supports CPU or Apple MPS |
+| Rust toolchain | stable | For compiling the Rust BPE engine — [one-line install](https://rustup.rs/) |
+| maturin | 1.0+ | PyO3 build tool — compiles Rust into an importable Python module |
 
 #### Dependency Notes
 
-PIE's dependency list is dead simple — only 7 packages, all of which are "could implement myself but using them is more convenient" utilities. No black-box libraries whatsoever.
+PIE's dependency list is intentionally minimal — just 7 packages, all "could implement ourselves but this is more convenient" utilities. No black-box libraries.
 
 | Package | Version | Purpose |
 |---|---|---|
-| **torch** | ≥2.0 | Neural network framework: tensor computation, autograd, DDP distributed training |
-| **numpy** | latest | Low-level numerical computation, data foundation for torch operations |
-| **pandas** | latest | Dataframe processing (multi-source corpus indexing, quota management, etc.) |
-| **pyarrow** | latest | Parquet file I/O, efficient read/write for large-scale binary corpora |
+| **torch** | ≥2.0 | Neural network framework: tensor ops, autograd, DDP distributed training |
+| **numpy** | latest | Low-level numerical computation, data foundation for torch ops |
+| **pandas** | latest | Tabular data processing (multi-source corpus indexing, quota management, etc.) |
+| **pyarrow** | latest | Parquet file I/O — efficient read/write for large binary corpora |
 | **pyyaml** | latest | Config file parsing (`config_zh.yaml`, `config_en.yaml`) |
 | **tqdm** | latest | Progress bar visualization |
 | **maturin** | ≥1.0 | Rust → Python build tool for the PyO3 BPE engine |
@@ -117,96 +231,98 @@ PIE's dependency list is dead simple — only 7 packages, all of which are "coul
 ### 1. Install Python Dependencies
 
 ```bash
-# For example, CUDA 12.1:
+# Example for CUDA 12.1:
 pip install torch --index-url https://download.pytorch.org/whl/cu121
 
-# Install the remaining dependencies (just 6 packages — not hundreds of lines dumped from a conda env)
+# Install remaining dependencies (6 packages — not a 300-line conda environment dump)
 pip install -r requirements.txt
-# Includes: torch, numpy, pandas, pyarrow, pyyaml, tqdm
+# Includes: numpy, pandas, pyarrow, pyyaml, tqdm, maturin
 ```
 
-### 2. Compile the Rust BPE Engine
+### 2. Build the Rust BPE Engine
 
-`custom_bpe` is the project's core tokenizer, implemented in Rust + PyO3, over 50× faster than a pure Python implementation. It's not on PyPI — you need to compile from source:
+`custom_bpe` is the project's core tokenizer, implemented in Rust + PyO3. It is **50× faster** than a pure Python implementation. It is not on PyPI and must be compiled from source:
 
 ```bash
-# Install Rust (if you haven't already)
+# Install Rust if you haven't already
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
 
-# Install maturin (the PyO3 build tool)
+# Install maturin (PyO3 build tool)
 pip install maturin
 
-# Enter the Rust project directory for the target language and compile into the current Python environment
+# Navigate to the Rust project directory for the target language and compile
 # Chinese version:
 cd Chinese/src/custom_bpe/
 maturin develop --release
 cd ../../..
 
-# English version — same process:
+# English version (same steps):
 cd English/src/custom_bpe/
 maturin develop --release
 cd ../../..
 ```
 
-After successful compilation, run `import custom_bpe` in the corresponding directory to call the Rust engine from Python.
+Once compiled, `import custom_bpe` will be available in Python from any working directory.
 
 ### 3. Edit Configuration
 
-All hyperparameters, paths, and data ratios are centralized in `config_zh.yaml` (or `config_en.yaml`) — **change one place, change everywhere**. Before training, you **must** update the dataset paths in the config to match your local machine:
+All hyperparameters, file paths, and data mixture ratios are centralized in `config_zh.yaml` (or `config_en.yaml`) — **one file controls everything**. Before training, you **must** update the dataset paths to match your local machine:
 
 ```yaml
-# Dataset paths for tokenizer training
+# Dataset path for tokenizer training
 tokenizer:
   datasets:
     - name: "SkyPile"
-      path: "/your/path/to/skypile"   # ← Change this
+      path: "/your/path/to/skypile"   # ← update this
 
-# Path to preprocessed binary corpus
+# Path to the preprocessed binary corpus
 training:
-  data_path: "./Dataset/all.bin"      # ← Change this
+  data_path: "./Dataset/all.bin"      # ← update this
 
-# Weight and vocabulary paths for inference
+# Checkpoint and vocabulary paths for inference
 inference:
   checkpoint_path: "../../Checkpoint/PIE-0.2B-dense.pth"
   vocab_path: "../../Tokenizer/tokenizer_32128/tokenizer_32128.json"
   merges_path: "../../Tokenizer/tokenizer_32128/merges.txt"
 ```
 
-### 4. Full Pipeline Reproduction
+### 4. Full Pipeline
 
-All commands below are executed from the `Chinese/src/` directory:
+All commands below are run from the `Chinese/src/` directory:
 
 ```bash
 cd Chinese/src/
 
-# ── Step 1: Train the BPE Tokenizer ──────────────────────────────────────────
+# ── Step 1: Train the BPE Tokenizer ─────────────────────────────────────────
 # Python side: multi-source corpus sampling (Chinese 40%, English 30%, Code 20%, Math 10%)
-# Rust side: core BPE training loop (count pair frequencies → merge → update), 50× faster than pure Python
+# Rust side: core BPE training loop (count pair frequencies → merge → update) — 50× faster than Python
 # Output: Tokenizer/tokenizer_32128/tokenizer_32128.json and merges.txt
 python tokenizer.py
 
-# ── Step 2: Large-Scale Data Preprocessing ───────────────────────────────────
-# 128-process parallel tokenization, cross-process shared counters for precise quota control (token-level precision)
-# Output: Dataset/all.bin (~4GB, directly mmap-readable by the training script)
+# ── Step 2: Large-Scale Data Preprocessing ──────────────────────────────────
+# 128 parallel processes for tokenization; cross-process shared counter for
+# token-level quota control
+# Output: Dataset/all.bin (~4 GB, memory-mapped directly during training)
 python dataprocess.py \
   --data_root /path/to/your/datasets \
   --tokenizer_path ../../Tokenizer/tokenizer_32128/tokenizer_32128.json \
   --merges_path ../../Tokenizer/tokenizer_32128/merges.txt \
   --total_tokens 1000000000
 
-# ── Step 3: Multi-GPU Distributed Training ───────────────────────────────────
-# DDP (DistributedDataParallel) + NCCL backend — adjust nproc_per_node to your GPU count
-# Supports BF16 mixed precision, torch.compile acceleration, Warmup + Cosine Decay scheduling, checkpoint resumption
-torchrun --nproc_per_node=2 train.py  # Change the number of GPUs as needed
+# ── Step 3: Multi-GPU Distributed Training ──────────────────────────────────
+# DDP (DistributedDataParallel) + NCCL backend; adjust nproc_per_node to your GPU count
+# Supports BF16 mixed precision, torch.compile, warmup + cosine decay LR schedule,
+# and checkpoint resumption
+torchrun --nproc_per_node=2 train.py  # adjust GPU count as needed
 
-# ── Step 4: Interactive Inference ─────────────────────────────────────────────
-# Streaming decoding, Top-K + Top-P + temperature sampling + repetition penalty — all tunable in config_zh.yaml
+# ── Step 4: Interactive Inference ───────────────────────────────────────────
+# Streaming decode with Top-K + Top-P + temperature sampling + repetition penalty
+# All parameters are configurable in config_zh.yaml
 python inference.py
-
 ```
-#### PS: Download the pretrained weights first if you haven't already
-Pretrained weights are available on HuggingFace: [🤗 Tianyu-Zhou/PIE1.0-0.2B-dense-base](https://huggingface.co/Tianyu-Zhou/PIE1.0-0.2B-dense-base/tree/main). Download and place them in the `Checkpoint/` directory.
+
+Pretrained weights are available on HuggingFace: [🤗 Tianyu-Zhou/PIE1.0-0.2B-dense-base](https://huggingface.co/Tianyu-Zhou/PIE1.0-0.2B-dense-base/tree/main). Download and place the file in the `Checkpoint/` directory.
 
 ---
 

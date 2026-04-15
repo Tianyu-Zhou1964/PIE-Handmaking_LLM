@@ -122,6 +122,8 @@ rustc --version   # 能打印版本号即成功
 
 ### Step 3 — 安装 Python 依赖
 
+
+**注意！Torch 一定要手动装，否则会是 CPU 版本的。**
 torch 需要单独指定 CUDA 版本安装，其余依赖走 requirements.txt：
 
 ```bash
@@ -139,14 +141,12 @@ pip install -r requirements.txt
 ```bash
 cd Chinese/src/custom_bpe/
 maturin develop --release
-cd ../../..
 ```
 
 验证编译成功：
 ```bash
 cd Chinese/src/
 python -c "import custom_bpe; print('BPE 引擎加载成功 ✓')"
-cd ../..
 ```
 
 ### Step 5 — 下载模型权重
