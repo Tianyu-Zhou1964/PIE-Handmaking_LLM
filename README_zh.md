@@ -86,6 +86,114 @@ while let Some((freq, pair)) = heap.pop() {
 
 ## 快速开始
 
+> 目标：下载权重，跑通推理。训练流程见下方「完整流程复现」章节。
+
+### Step 1 — 创建环境并克隆仓库
+
+```bash
+conda create -n pie python=3.11 -y
+conda activate pie
+
+git clone https://github.com/Tianyu-Zhou1964/PIE-Handmaking_LLM.git
+cd PIE-Handmaking_LLM
+```
+
+### Step 2 — 安装 Rust 工具链
+
+BPE 引擎用 Rust + PyO3 实现，需要本地编译，**先装 Rust 再装 Python 依赖**。
+
+**Linux / macOS：**
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env
+```
+
+**Windows（PowerShell）：**
+```powershell
+winget install Rustlang.Rustup
+# 或去 https://rustup.rs 下载 rustup-init.exe 双击安装
+# 安装完重开一个终端让环境变量生效
+```
+
+验证：
+```bash
+rustc --version   # 能打印版本号即成功
+```
+
+### Step 3 — 安装 Python 依赖
+
+torch 需要单独指定 CUDA 版本安装，其余依赖走 requirements.txt：
+
+```bash
+# 按你的 CUDA 版本选一条（查看：nvidia-smi 右上角）
+pip install torch --index-url https://download.pytorch.org/whl/cu121   # CUDA 12.1
+pip install torch --index-url https://download.pytorch.org/whl/cu118   # CUDA 11.8
+# 纯 CPU 推理：pip install torch
+
+# 安装其余依赖（含 maturin，无需单独安装）
+pip install -r requirements.txt
+```
+
+### Step 4 — 编译 BPE 引擎
+
+```bash
+cd Chinese/src/custom_bpe/
+maturin develop --release
+cd ../../..
+```
+
+验证编译成功：
+```bash
+cd Chinese/src/
+python -c "import custom_bpe; print('BPE 引擎加载成功 ✓')"
+cd ../..
+```
+
+### Step 5 — 下载模型权重
+
+**国际用户（HuggingFace）：**
+```bash
+pip install huggingface_hub
+python -c "
+from huggingface_hub import hf_hub_download
+hf_hub_download(
+    repo_id='Tianyu-Zhou/PIE1.0-0.2B-dense-base',
+    filename='PIE-0.2B-dense.pth',
+    local_dir='./Checkpoint'
+)
+"
+```
+
+**国内用户（ModelScope）：**
+```bash
+pip install modelscope
+python -c "
+from modelscope import snapshot_download
+snapshot_download(
+    'Zaoshangzhou/PIE1.0-0.2B-dense-base',
+    local_dir='./Checkpoint'
+)
+"
+```
+
+确认权重已就位：
+```bash
+ls Checkpoint/
+# 应看到 PIE-0.2B-dense.pth
+```
+
+### Step 6 — 启动推理
+
+```bash
+cd Chinese/src/
+python inference.py
+```
+
+支持 CUDA / Apple MPS / CPU，`device="auto"` 自动检测，无需手动指定。  
+采样参数（temperature、top_k、top_p、repetition_penalty 等）在 `Chinese/config_zh.yaml` 中调整。
+
+## 全流程复现
+
 ### 0. 环境要求
 
 | 依赖 | 最低版本 | 说明 |
@@ -167,7 +275,7 @@ inference:
   merges_path: "../../Tokenizer/tokenizer_32128/merges.txt"
 ```
 
-### 4. 全流程复现
+### 4. 全流程详情
 
 以下命令均在 `Chinese/src/` 目录下执行：
 
