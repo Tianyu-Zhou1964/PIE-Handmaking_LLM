@@ -1,0 +1,7 @@
+torch>=2.0
+numpy
+pandas
+pyarrow
+pyyaml
+tqdm
+maturin>=1.0

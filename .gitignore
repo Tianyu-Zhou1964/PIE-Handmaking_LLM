@@ -1,0 +1,41 @@
+# ── 模型权重（上传到 HuggingFace） ──
+Checkpoint/*
+!Checkpoint/.gitkeep
+*.pth
+*.pt
+*.bin
+*.safetensors
+*.gguf
+
+# ── 训练数据（上传到 HuggingFace） ──
+Dataset/
+*.parquet
+
+# ── Rust 编译产物 ──
+**/target/
+**/custom_bpe/*.so
+**/custom_bpe/*.pyd
+**/custom_bpe/*.dylib
+
+# ── Python 缓存 ──
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# ── 系统文件 ──
+.DS_Store
+Thumbs.db
+
+# ── IDE ──
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── 训练日志（可选，看你想不想保留） ──
+# wandb/
+# runs/
+# *.log

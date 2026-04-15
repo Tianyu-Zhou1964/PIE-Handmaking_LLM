@@ -1,0 +1,17 @@
+[package]
+name = "custom_bpe"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "custom_bpe"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py39"] }
+hashbrown = "0.14" # 依然使用高性能 HashMap
+regex = "1.10"     # 新增：Rust 正则库
+rustc-hash = "1.1"
+aho-corasick = "1.1"
+serde_json = "1.0.149"
+serde = { version = "1.0.228", features = ["derive"] }

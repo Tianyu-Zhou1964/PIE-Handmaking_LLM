@@ -1,0 +1,143 @@
+# ==============================================================================
+# PIE 大模型项目 · 统一配置文件
+# 所有脚本通过 `yaml.safe_load(open("config_zh.yaml"))` 读取此文件
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 模型结构 
+# ------------------------------------------------------------------------------
+model:
+  dim: 1024                  # 词嵌入维度 d_model
+  n_layers: 16              # Transformer Block 层数
+  n_heads: 16               # 多头注意力头数
+  vocab_size: 32128         # 词表大小 (普通词元 + 特殊词元)
+  multiple_of: 256          # FFN 隐藏层维度对齐倍数
+  norm_eps: 1.0e-5          # RMSNorm epsilon
+  max_seq_len: 1024         # 最大序列长度
+  n_experts: 4              # MoE 总专家数
+  n_experts_per_tok: 2      # 每个 Token 激活的专家数 (Top-K)
+  rope_base: 10000.0        # RoPE 旋转位置编码基频
+
+# ------------------------------------------------------------------------------
+# 分词器训练 (Tokenizer.py)
+# ------------------------------------------------------------------------------
+tokenizer:
+  vocab_size: 32128         # 目标词表大小 (与 model.vocab_size 保持一致)
+  save_path: "./Tokenizer/"   # 训练好的词表 JSON 保存路径
+  merges_path: "./Tokenizer/"           # 合并规则保存路径
+  target_chars: 50000000    # BPE 训练时的目标采样字符总量 (5000 万)
+
+  # 特殊词元列表：训练完 BPE 后追加到词表末尾
+  special_tokens:
+    - "<pad>"
+    - "<bos>"
+    - "<eos>"
+    - "<|user|>"
+    - "<|assistant|>"
+    - "<|system|>"
+    - "<|endofturn|>"
+    - "<|tool_call|>"
+    - "<|tool_result|>"
+    - "<|think|>"
+    - "<|think_end|>"
+    - "<|image|>"
+    - "<|image_end|>"
+    - "<|audio|>"
+    - "<|audio_end|>"
+  num_reserved_tokens: 49   # 额外预留的 <|reserved_N|> 数量
+
+  # 多数据源配比 (仅用于 BPE 训练采样，与 dataprocess 的配比独立)
+  # 
+  datasets:
+    - name: "SkyPile"
+      path: ""
+      format: "jsonl"
+      field: "text"
+      target_chars: 20000000
+
+    - name: "FineWeb"
+      path: ""
+      format: "parquet"
+      field: "text"
+      target_chars: 15000000
+
+    - name: "StarCoder_python"
+      path: ""
+      format: "parquet"
+      field: "content"
+      target_chars: 4000000
+
+    - name: "StarCoder_rust"
+      path: ""
+      format: "parquet"
+      field: "content"
+      target_chars: 3000000
+
+    - name: "StarCoder_markdown"
+      path: ""
+      format: "parquet"
+      field: "content"
+      target_chars: 3000000
+
+    - name: "NuminaMath"
+      path: ""
+      format: "parquet"
+      field: "problem+solution"
+      target_chars: 5000000
+
+# ------------------------------------------------------------------------------
+# 数据预处理 (dataprocess.py)
+# 注意：dataprocess5.py 已使用 argparse，以下仅作为默认值参考。
+# 命令行参数优先级高于此配置。
+# ------------------------------------------------------------------------------
+dataprocess:
+  data_root: ""
+  output_dir: "./DATASET"
+  tokenizer_path: "./Tokenizer/tokenizer_32128/tokenizer_32128.json"
+  merges_path: "./data/tokenizer/merges.txt"
+  num_processes: 128
+  total_tokens: 1000000000  # 1B tokens
+  # 各数据源占比 (必须加起来等于 1.0)
+  category_ratios:
+    SkyPile: 0.60
+    FineWeb: 0.25
+    StarCoder: 0.10
+    NuminaMath: 0.05
+
+# ------------------------------------------------------------------------------
+# 训练 (train.py)
+# ------------------------------------------------------------------------------
+training:
+  data_path: "./DATASET/all.bin"          # 预处理好的二进制语料路径
+  batch_size: 4                        # 单卡 batch size
+  seq_len: 256                         # 训练序列长度
+  learning_rate: 3.0e-4                 # 峰值学习率
+  lr_min: 3.0e-5                        # 余弦衰减最低学习率
+  warmup_steps: 400                     # Warmup 步数
+  epochs: 15                            # 训练轮数
+  save_interval: 1000                   # 每 N 步保存 checkpoint
+  log_interval: 100                     # 每 N 步打印 loss
+  max_checkpoints: 3                    # 最多保留几个历史 checkpoint
+  resume_file: "model_latest.pth"       # 断点续训文件名
+  use_bf16: true                        # 是否使用 bfloat16 混合精度
+  compile_fullgraph: false              # torch.compile 是否启用 fullgraph
+  grad_clip_max_norm: 1.0               # 梯度裁剪阈值
+  aux_loss_weight: 0.01                 # MoE 辅助损失权重
+  num_workers: 8                        # DataLoader worker 数量
+
+# ------------------------------------------------------------------------------
+# 推理 (inference.py)
+# ------------------------------------------------------------------------------
+inference:
+  checkpoint_path: "../../Checkpoint/PIE-0.2B-dense.pth"
+  vocab_path: "../../Tokenizer/tokenizer_32128.json"
+  merges_path: "../../Tokenizer/merges.txt"
+  device: "auto"            # "auto" 表示有 CUDA 用 CUDA，否则 CPU
+  use_fp16: true            # 推理时是否转半精度
+  max_new_tokens: 200       # 最大生成长度
+  temperature: 0.3          # 采样温度
+  top_k: 50                 # Top-K 采样
+  top_p: 0.9                # Top-P (nucleus) 采样
+  repetition_penalty: 3.0   # 重复惩罚强度 (从最近 N 个 token 的 logits 中减去此值)
+  repetition_window: 100    # 重复惩罚回看窗口大小
+  model_name: "派PIE-0.2B-dense-base"   # 启动时显示的模型名称

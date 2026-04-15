@@ -1,0 +1,143 @@
+# ==============================================================================
+# PIE Large Language Model Project · Unified Configuration File
+# All scripts read this file via `yaml.safe_load(open("config_en.yaml"))`
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Model Architecture
+# ------------------------------------------------------------------------------
+model:
+  dim: 1024                  # Word embedding dimension d_model
+  n_layers: 16              # Number of Transformer Blocks
+  n_heads: 16               # Number of multi-head attention heads
+  vocab_size: 32128         # Vocabulary size (regular tokens + special tokens)
+  multiple_of: 256          # FFN hidden layer dimension alignment multiple
+  norm_eps: 1.0e-5          # RMSNorm epsilon
+  max_seq_len: 1024         # Maximum sequence length
+  n_experts: 4              # Total number of MoE experts
+  n_experts_per_tok: 2      # Number of experts activated per token (Top-K)
+  rope_base: 10000.0        # RoPE rotary position encoding base frequency
+
+# ------------------------------------------------------------------------------
+# Tokenizer Training (Tokenizer.py)
+# ------------------------------------------------------------------------------
+tokenizer:
+  vocab_size: 32128         # Target vocabulary size (must match model.vocab_size)
+  save_path: "./Tokenizer/"   # Path to save trained vocabulary JSON
+  merges_path: "./Tokenizer/"           # Path to save merge rules
+  target_chars: 50000000    # Target sampling character count for BPE training (50 million)
+
+  # Special token list: appended to vocabulary after BPE training completes
+  special_tokens:
+    - "<pad>"
+    - "<bos>"
+    - "<eos>"
+    - "<|user|>"
+    - "<|assistant|>"
+    - "<|system|>"
+    - "<|endofturn|>"
+    - "<|tool_call|>"
+    - "<|tool_result|>"
+    - "<|think|>"
+    - "<|think_end|>"
+    - "<|image|>"
+    - "<|image_end|>"
+    - "<|audio|>"
+    - "<|audio_end|>"
+  num_reserved_tokens: 49   # Number of additional reserved <|reserved_N|> tokens
+
+  # Multi-source dataset ratio (used only for BPE training sampling, independent of dataprocess ratios)
+  #
+  datasets:
+    - name: "SkyPile"
+      path: ""
+      format: "jsonl"
+      field: "text"
+      target_chars: 20000000
+
+    - name: "FineWeb"
+      path: ""
+      format: "parquet"
+      field: "text"
+      target_chars: 15000000
+
+    - name: "StarCoder_python"
+      path: ""
+      format: "parquet"
+      field: "content"
+      target_chars: 4000000
+
+    - name: "StarCoder_rust"
+      path: ""
+      format: "parquet"
+      field: "content"
+      target_chars: 3000000
+
+    - name: "StarCoder_markdown"
+      path: ""
+      format: "parquet"
+      field: "content"
+      target_chars: 3000000
+
+    - name: "NuminaMath"
+      path: ""
+      format: "parquet"
+      field: "problem+solution"
+      target_chars: 5000000
+
+# ------------------------------------------------------------------------------
+# Data Preprocessing (dataprocess.py)
+# Note: dataprocess5.py has already adopted argparse; the following serves as default values only.
+# Command-line arguments take precedence over this configuration.
+# ------------------------------------------------------------------------------
+dataprocess:
+  data_root: ""
+  output_dir: "./DATASET"
+  tokenizer_path: "./Tokenizer/tokenizer_32128/tokenizer_32128.json"
+  merges_path: "./data/tokenizer/merges.txt"
+  num_processes: 128
+  total_tokens: 1000000000  # 1B tokens
+  # Ratio of each data source (must sum to 1.0)
+  category_ratios:
+    SkyPile: 0.60
+    FineWeb: 0.25
+    StarCoder: 0.10
+    NuminaMath: 0.05
+
+# ------------------------------------------------------------------------------
+# Training (train.py)
+# ------------------------------------------------------------------------------
+training:
+  data_path: "./DATASET/all.bin"          # Path to preprocessed binary corpus
+  batch_size: 4                        # Single-GPU batch size
+  seq_len: 256                         # Training sequence length
+  learning_rate: 3.0e-4                 # Peak learning rate
+  lr_min: 3.0e-5                        # Minimum learning rate for cosine decay
+  warmup_steps: 400                     # Number of warmup steps
+  epochs: 15                            # Number of training epochs
+  save_interval: 1000                   # Save checkpoint every N steps
+  log_interval: 100                     # Print loss every N steps
+  max_checkpoints: 3                    # Maximum number of historical checkpoints to keep
+  resume_file: "model_latest.pth"       # Checkpoint file name for resuming training
+  use_bf16: true                        # Whether to use bfloat16 mixed precision
+  compile_fullgraph: false              # Whether torch.compile uses fullgraph mode
+  grad_clip_max_norm: 1.0               # Gradient clipping threshold
+  aux_loss_weight: 0.01                 # MoE auxiliary loss weight
+  num_workers: 8                        # DataLoader number of workers
+
+# ------------------------------------------------------------------------------
+# Inference (inference.py)
+# ------------------------------------------------------------------------------
+inference:
+  checkpoint_path: "../../Checkpoint/PIE-0.2B-dense.pth"
+  vocab_path: "../../Tokenizer/tokenizer_32128.json"
+  merges_path: "../../Tokenizer/merges.txt"
+  device: "auto"            # "auto" means use CUDA if available, otherwise CPU
+  use_fp16: true            # Whether to use half precision during inference
+  max_new_tokens: 200       # Maximum generation length
+  temperature: 0.3          # Sampling temperature
+  top_k: 50                 # Top-K sampling
+  top_p: 0.9                # Top-P (nucleus) sampling
+  repetition_penalty: 3.0   # Repetition penalty strength (subtract this value from logits of recently seen N tokens)
+  repetition_window: 100    # Lookback window size for repetition penalty
+  model_name: "派PIE-0.2B-dense-base"   # Model name displayed at startup
