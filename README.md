@@ -29,7 +29,7 @@
 
 ## What Is This Project?
 
-PIE is a **fully from-scratch** ~0.2B-parameter Chinese language model pretraining framework — and my first textbook. It covers the entire pretraining pipeline end-to-end:
+PIE is a **fully from-scratch** ~0.2B-parameter(default, you can change it into whatever you like) language model pretraining framework — and my first textbook. It covers the entire pretraining pipeline end-to-end:
 
 ```
 Corpus Sampling → BPE Tokenizer Training → Data Preprocessing → Model Definition → Multi-GPU Distributed Training → Streaming Inference
