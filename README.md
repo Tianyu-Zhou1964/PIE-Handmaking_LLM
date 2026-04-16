@@ -85,11 +85,6 @@ And here's an explanation from the model script:
   # After transpose: it tells the CPU "read one number, skip 3 slots to get the next."
   # contiguous() physically rearranges the data in memory so it's sequential again.
 ```
-
----
-
-这是英文版：
-
 ---
 
 ## Quick Start
