@@ -15,12 +15,14 @@ import yaml          # 从 config_zh.yaml 加载配置
 # ==============================================================================
 # 配置参数：从 config_zh.yaml 加载
 # ==============================================================================
-with open("config_zh.yaml", "r", encoding="utf-8") as _f:
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(_BASE_DIR, "../config_zh.yaml"), "r", encoding="utf-8") as _f:
     _cfg = yaml.safe_load(_f)
     _tok_cfg = _cfg["tokenizer"]
 
-SAVE_PATH    = _tok_cfg["save_path"]
-MERGES_PATH  = _tok_cfg["merges_path"]
+_TOKENIZER_DIR = os.path.join(_BASE_DIR, _tok_cfg["save_path"])
+SAVE_PATH   = os.path.join(_TOKENIZER_DIR, f"tokenizer_{_tok_cfg['vocab_size']}.json")
+MERGES_PATH = os.path.join(_TOKENIZER_DIR, "merges.txt")
 VOCAB_SIZE   = _tok_cfg["vocab_size"]
 TARGET_CHARS = _tok_cfg["target_chars"]
 
